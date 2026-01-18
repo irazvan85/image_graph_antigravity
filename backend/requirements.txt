@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+python-multipart
+torch
+transformers
+pillow
+sentence-transformers
+numpy
+scikit-learn
+easyocr
+python-multipart
+networkx
+pytest
+httpx
+pytest-asyncio
+google-generativeai
+

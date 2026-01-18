@@ -1,0 +1,68 @@
+---
+- name: Deploy ImageGraph on Windows
+  hosts: imagegraph_windows
+  vars:
+    app_root: "C:\\ImageGraph"
+    backend_port: 8001
+    frontend_port: 5173
+
+  tasks:
+    - name: Create application directory
+      win_file:
+        path: "{{ app_root }}"
+        state: directory
+
+    - name: Install Chocolatey
+      win_shell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+      args:
+        creates: "C:\\ProgramData\\chocolatey\\bin\\choco.exe"
+
+    - name: Install system dependencies via Chocolatey
+      win_chocolatey:
+        name:
+          - python
+          - nodejs
+          - nssm
+        state: present
+
+    - name: Copy application files
+      win_copy:
+        src: "../"
+        dest: "{{ app_root }}\\"
+
+    - name: Setup Backend Virtualenv
+      win_command: "python -m venv {{ app_root }}\\backend\\venv"
+      args:
+        creates: "{{ app_root }}\\backend\\venv\\Scripts\\python.exe"
+
+    - name: Install Backend Requirements
+      win_command: "{{ app_root }}\\backend\\venv\\Scripts\\pip.exe install -r {{ app_root }}\\backend\\requirements.txt"
+
+    - name: Install Frontend Dependencies
+      win_shell: "npm install"
+      args:
+        chdir: "{{ app_root }}\\frontend"
+
+    - name: Create Backend Service via NSSM
+      win_shell: |
+        nssm install ImageGraphBackend "{{ app_root }}\\backend\\venv\\Scripts\\python.exe" "-m uvicorn app.main:app --host 0.0.0.0 --port {{ backend_port }}"
+        nssm set ImageGraphBackend AppDirectory "{{ app_root }}\\backend"
+        nssm start ImageGraphBackend
+      ignore_errors: yes
+
+    - name: Create Frontend Service via NSSM
+      win_shell: |
+        nssm install ImageGraphFrontend "cmd" "/c npm run dev"
+        nssm set ImageGraphFrontend AppDirectory "{{ app_root }}\\frontend"
+        nssm start ImageGraphFrontend
+      ignore_errors: yes
+
+    - name: Ensure services are running
+      win_service:
+        name: "{{ item }}"
+        state: started
+        start_mode: auto
+      loop:
+        - ImageGraphBackend
+        - ImageGraphFrontend
