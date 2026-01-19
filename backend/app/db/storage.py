@@ -107,4 +107,11 @@ class Storage:
             vecs.append(np.frombuffer(r[1], dtype=np.float32))
         return ids, np.array(vecs) if vecs else np.empty((0, 512)) # CLIP is 512d
 
+    def clear_database(self):
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM embeddings')
+        cursor.execute('DELETE FROM concepts')
+        cursor.execute('DELETE FROM images')
+        self.conn.commit()
+
 db = Storage()

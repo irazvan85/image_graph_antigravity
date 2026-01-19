@@ -87,15 +87,47 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
         }
     };
 
+    const handleReset = async () => {
+        if (!window.confirm("Are you sure you want to clear the entire database? This cannot be undone.")) return;
+        try {
+            const res = await fetch(`${API_Base}/reset`, { method: 'POST' });
+            if (res.ok) {
+                alert("Database cleared");
+                onScan(); // Refresh graph
+            }
+        } catch (e) {
+            alert("Failed to reset database");
+        }
+    };
+
     const handleSearchChange = (e) => {
         const val = e.target.value;
         setSearchQuery(val);
         onSearch(val);
     };
 
+    const progressPct = progress.total > 0 ? (progress.processed / progress.total) * 100 : 0;
+
     return (
-        <div style={{ padding: '20px', background: '#f8f9fa', height: '100%', borderRight: '1px solid #ddd', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <h2 style={{ margin: 0 }}>ImageGraph</h2>
+        <div style={{
+            padding: '20px',
+            background: '#f8f9fa',
+            height: '100%',
+            borderRight: '1px solid #ddd',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            overflowY: 'auto'
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0 }}>ImageGraph</h2>
+                <button
+                    onClick={handleReset}
+                    style={{ fontSize: '11px', padding: '4px 8px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                    Reset DB
+                </button>
+            </div>
 
             {/* Search Box */}
             <div>
@@ -155,11 +187,34 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                 </div>
             </div>
 
-            {status === "scanning" && (
-                <div style={{ padding: '10px', background: '#e9ecef', borderRadius: '4px' }}>
-                    <div style={{ fontWeight: 'bold' }}>Scanning... {progress.processed} / {progress.total}</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '5px', wordBreak: 'break-all' }}>
-                        {progress.current}
+            {(status === "scanning" || (progress.logs && progress.logs.length > 0)) && (
+                <div style={{ padding: '10px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{status === "scanning" ? 'Scanning Folder...' : 'Last Scan Result'}</span>
+                        <span>{progress.processed} / {progress.total}</span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${progressPct}%`, height: '100%', background: '#28a745', transition: 'width 0.3s ease' }} />
+                    </div>
+
+                    {/* Log Window */}
+                    <div style={{
+                        height: '120px',
+                        background: '#1e1e1e',
+                        color: '#d4d4d4',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column-reverse' // Auto-scroll to bottom
+                    }}>
+                        {progress.logs && [...progress.logs].reverse().map((line, i) => (
+                            <div key={i} style={{ marginBottom: '2px' }}>{line}</div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -181,7 +236,7 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                 />
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ borderTop: '1px solid #eee', paddingTop: '10px' }}>
                 {selectedNode ? (
                     <div style={{ padding: '10px', background: '#fff', borderRadius: '8px', border: '1px solid #eee' }}>
                         <h3 style={{ marginTop: 0 }}>{selectedNode.name}</h3>

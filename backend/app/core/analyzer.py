@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import torch
 from PIL import Image
@@ -37,6 +38,7 @@ class ImageAnalyzer:
         if not api_key:
             return None
             
+        start_time = time.perf_counter()
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel('gemini-1.5-flash')
@@ -63,11 +65,13 @@ class ImageAnalyzer:
             ocr_result = self.reader.readtext(image_path, detail=0)
             ocr_text = " ".join(ocr_result)
             
+            duration = time.perf_counter() - start_time
             return {
                 "caption": data.get("caption", ""),
                 "ocr_text": ocr_text,
                 "embedding": embedding.tolist(),
-                "tags": data.get("tags", [])
+                "tags": data.get("tags", []),
+                "metadata": {"duration": duration, "method": "Gemini Deep AI"}
             }
         except Exception as e:
             print(f"LLM Error: {e}")
@@ -75,6 +79,7 @@ class ImageAnalyzer:
 
     def analyze_text(self, file_path: str):
         self._load_models()
+        start_time = time.perf_counter()
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
@@ -95,11 +100,13 @@ class ImageAnalyzer:
         stop_words = {'the', 'and', 'this', 'that', 'with', 'from', 'image', 'picture', 'photo', 'about', 'there', 'their'}
         tags = list(set([w for w in words if w not in stop_words]))[:10]
 
+        duration = time.perf_counter() - start_time
         return {
             "caption": summary_text[:100] + "...", # Use start of text as caption
             "content": content,
             "embedding": embedding.tolist(),
-            "tags": tags
+            "tags": tags,
+            "metadata": {"duration": duration, "method": "Text Analysis"}
         }
 
     def analyze(self, file_path: str, use_llm=False, api_key=""):
@@ -107,9 +114,11 @@ class ImageAnalyzer:
         if ext == '.txt':
             return self.analyze_text(file_path)
 
+        start_time = time.perf_counter()
         if use_llm:
             res = self.analyze_with_llm(file_path, api_key)
             if res: return res
+            # If LLM fails, we continue to local, but we reset the timer or just let it cumulative
             
         self._load_models()
         try:
@@ -130,10 +139,12 @@ class ImageAnalyzer:
         # 3. Generate Embedding
         embedding = self.clip_model.encode(image)
         
+        duration = time.perf_counter() - start_time
         return {
             "caption": caption,
             "ocr_text": ocr_text,
-            "embedding": embedding.tolist()
+            "embedding": embedding.tolist(),
+            "metadata": {"duration": duration, "method": "Local (BLIP/OCR)"}
         }
 
 analyzer = ImageAnalyzer() 

@@ -79,3 +79,10 @@ def export_graph():
     elements = graph_builder.export_cytoscape()
     return {"graph": elements}
 
+@app.post("/reset")
+def reset_database():
+    if worker.status == "scanning":
+        raise HTTPException(status_code=409, detail="Cannot reset while scanning")
+    db.clear_database()
+    return {"status": "Database cleared"}
+

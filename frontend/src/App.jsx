@@ -32,7 +32,7 @@ function App() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: 'Segoe UI, sans-serif' }}>
-      <div style={{ width: '350px', flexShrink: 0 }}>
+      <div style={{ width: '350px', flexShrink: 0, height: '100%' }}>
         <ControlPanel
           onScan={() => fetchGraph(simThreshold)}
           onUpdateParams={handleUpdateParams}

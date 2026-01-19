@@ -12,8 +12,15 @@ class ScanWorker:
         self.total_files = 0
         self.processed_files = 0
         self.current_file = ""
+        self.logs = []
         self._stop_event = threading.Event()
         self.thread = None
+
+    def log(self, message):
+        timestamp = time.strftime("%H:%M:%S")
+        self.logs.append(f"[{timestamp}] {message}")
+        if len(self.logs) > 50:
+            self.logs.pop(0)
 
     def start_scan(self, folder_path, use_llm=False, api_key=""):
         if self.status == "scanning":
@@ -22,9 +29,12 @@ class ScanWorker:
         self.status = "scanning"
         self.total_files = 0
         self.processed_files = 0
+        self.logs = []
         self._stop_event.clear()
         self.use_llm = use_llm
         self.api_key = api_key
+        
+        self.log(f"Starting scan of {folder_path}...")
         
         # Enqueue files
         valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.txt')
@@ -35,6 +45,8 @@ class ScanWorker:
                     files.append(os.path.join(root, f))
         
         self.total_files = len(files)
+        self.log(f"Found {self.total_files} files.")
+        
         for f in files:
             self.queue.put(f)
             
@@ -49,12 +61,23 @@ class ScanWorker:
             
             ext = os.path.splitext(file_path)[1].lower()
             item_type = "text" if ext == ".txt" else "image"
+            fname = os.path.basename(file_path)
 
             try:
                 # Analyze
                 result = analyzer.analyze(file_path, self.use_llm, self.api_key)
                 if result:
-                    # If LLM gave us tags, use them. Otherwise, fallback to heuristic
+                    metadata = result.get("metadata", {})
+                    method = metadata.get("method", "Unknown")
+                    duration = metadata.get("duration", 0)
+                    
+                    # If we requested LLM but method is Local, it means LLM failed
+                    if self.use_llm and method == "Local (BLIP/OCR)":
+                        self.log(f"Fallback: LLM failed for {fname}, using local analysis.")
+
+                    self.log(f"{method}: Analyzed {fname} in {duration:.1f}s")
+                    
+                    # If LLM/Analysis gave us tags, use them.
                     if 'tags' in result and result['tags']:
                         tags = result['tags']
                     else:
@@ -74,21 +97,24 @@ class ScanWorker:
                         embedding=result['embedding'],
                         tags=tags
                     )
+                    self.log(f"Saved {fname} to graph.")
             except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+                self.log(f"Error processing {fname}: {e}")
             
             self.processed_files += 1
             self.queue.task_done()
             
         self.status = "idle"
         self.current_file = ""
+        self.log("Scan complete.")
 
     def get_progress(self):
         return {
             "status": self.status,
             "total": self.total_files,
             "processed": self.processed_files,
-            "current": os.path.basename(self.current_file) if self.current_file else ""
+            "current": os.path.basename(self.current_file) if self.current_file else "",
+            "logs": self.logs
         }
 
 worker = ScanWorker()
