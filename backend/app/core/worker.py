@@ -27,7 +27,7 @@ class ScanWorker:
         self.api_key = api_key
         
         # Enqueue files
-        valid_exts = ('.jpg', '.jpeg', '.png', '.webp')
+        valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.txt')
         files = []
         for root, _, filenames in os.walk(folder_path):
             for f in filenames:
@@ -47,9 +47,9 @@ class ScanWorker:
             file_path = self.queue.get()
             self.current_file = file_path
             
-            # Check if already processed (simple check, or re-process)
-            # For now, we process everything. Optimizations later.
-            
+            ext = os.path.splitext(file_path)[1].lower()
+            item_type = "text" if ext == ".txt" else "image"
+
             try:
                 # Analyze
                 result = analyzer.analyze(file_path, self.use_llm, self.api_key)
@@ -58,8 +58,8 @@ class ScanWorker:
                     if 'tags' in result and result['tags']:
                         tags = result['tags']
                     else:
-                        caption_graph = result['caption'].lower().split()
-                        ocr_graph = result['ocr_text'].lower().split()
+                        caption_graph = result.get('caption', "").lower().split()
+                        ocr_graph = result.get('ocr_text', "").lower().split()
                         
                         # Basic stop word removal (very basic)
                         stop_words = {'the', 'and', 'this', 'that', 'with', 'from', 'image', 'picture', 'photo'}
@@ -67,9 +67,10 @@ class ScanWorker:
                     
                     db.add_image(
                         path=file_path,
-                        thumbnail_path="", # TODO: generate thumbnail
-                        caption=result['caption'],
-                        ocr_text=result['ocr_text'],
+                        type=item_type,
+                        thumbnail_path="", 
+                        caption=result.get('caption', ""),
+                        ocr_text=result.get('ocr_text', "") if item_type == "image" else result.get('content', ""),
                         embedding=result['embedding'],
                         tags=tags
                     )

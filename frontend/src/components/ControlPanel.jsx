@@ -53,7 +53,7 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
     }, [status, onScan]);
 
     useEffect(() => {
-        if (selectedNode && selectedNode.type === 'image') {
+        if (selectedNode && (selectedNode.type === 'image' || selectedNode.type === 'text')) {
             // Fetch details
             const id = selectedNode.id.split('_')[1];
             fetch(`${API_Base}/image/${id}`)
@@ -189,12 +189,28 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
 
                         {imageMetadata && (
                             <div style={{ marginTop: '15px' }}>
-                                <img
-                                    src={`${API_Base}/image_content/${imageMetadata.id}`}
-                                    alt="preview"
-                                    style={{ width: '100%', borderRadius: '4px', marginBottom: '10px' }}
-                                />
-                                <p style={{ fontSize: '14px' }}><strong>Caption:</strong> {imageMetadata.caption}</p>
+                                {selectedNode.type === 'image' ? (
+                                    <img
+                                        src={`${API_Base}/image_content/${imageMetadata.id}`}
+                                        alt="preview"
+                                        style={{ width: '100%', borderRadius: '4px', marginBottom: '10px' }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        padding: '10px',
+                                        background: '#f1f3f5',
+                                        borderRadius: '4px',
+                                        fontSize: '12px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        marginBottom: '10px',
+                                        whiteSpace: 'pre-wrap',
+                                        border: '1px solid #dee2e6'
+                                    }}>
+                                        {imageMetadata.ocr_text || "No content"}
+                                    </div>
+                                )}
+                                <p style={{ fontSize: '14px' }}><strong>{selectedNode.type === 'image' ? 'Caption' : 'Summary'}:</strong> {imageMetadata.caption}</p>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                                     {imageMetadata.tags.map(tag => (
                                         <span key={tag} style={{ padding: '2px 8px', background: '#e9ecef', borderRadius: '12px', fontSize: '11px' }}>{tag}</span>

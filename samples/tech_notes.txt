@@ -1,0 +1,4 @@
+This is a sample text file about cars and technology. 
+It should be scanned by ImageGraph and appear as a text node in the knowledge graph.
+Since it mentions 'cars', it might semantically connect to images of cars in the same folder.
+Antigravity is powerful.

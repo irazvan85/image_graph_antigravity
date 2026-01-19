@@ -31,6 +31,15 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
             }
         },
         {
+            selector: 'node[type="text"]',
+            style: {
+                'background-color': '#fd7e14',
+                'shape': 'ellipse',
+                'width': 40,
+                'height': 40
+            }
+        },
+        {
             selector: 'node[type="concept"]',
             style: {
                 'background-color': '#28a745',

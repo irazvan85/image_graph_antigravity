@@ -73,17 +73,49 @@ class ImageAnalyzer:
             print(f"LLM Error: {e}")
             return None
 
-    def analyze(self, image_path: str, use_llm=False, api_key=""):
+    def analyze_text(self, file_path: str):
+        self._load_models()
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"Error reading text file {file_path}: {e}")
+            return None
+
+        # Truncate content for CLIP (usually max 77 tokens, but for sentence-transformers we just give it a chunk)
+        # SentenceTransformer handles longer text better than raw CLIP, but we limit for speed/memory
+        summary_text = content[:500] 
+
+        # Generate embedding for text
+        # CLIP ViT-B-32 in SentenceTransformer handles text as well
+        embedding = self.clip_model.encode(summary_text)
+
+        # Extract keywords (simple heuristic: words > 3 chars, split by lines/space)
+        words = [w.strip(".,!?;:()[]{}").lower() for w in summary_text.split() if len(w) > 4]
+        stop_words = {'the', 'and', 'this', 'that', 'with', 'from', 'image', 'picture', 'photo', 'about', 'there', 'their'}
+        tags = list(set([w for w in words if w not in stop_words]))[:10]
+
+        return {
+            "caption": summary_text[:100] + "...", # Use start of text as caption
+            "content": content,
+            "embedding": embedding.tolist(),
+            "tags": tags
+        }
+
+    def analyze(self, file_path: str, use_llm=False, api_key=""):
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == '.txt':
+            return self.analyze_text(file_path)
+
         if use_llm:
-            res = self.analyze_with_llm(image_path, api_key)
+            res = self.analyze_with_llm(file_path, api_key)
             if res: return res
-            # Fallback to local if LLM fails
             
         self._load_models()
         try:
-            image = Image.open(image_path).convert('RGB')
+            image = Image.open(file_path).convert('RGB')
         except Exception as e:
-            print(f"Error opening image {image_path}: {e}")
+            print(f"Error opening image {file_path}: {e}")
             return None
 
         # 1. Generate Caption
@@ -92,7 +124,7 @@ class ImageAnalyzer:
         caption = self.blip_processor.decode(out[0], skip_special_tokens=True)
 
         # 2. Extract OCR
-        ocr_result = self.reader.readtext(image_path, detail=0)
+        ocr_result = self.reader.readtext(file_path, detail=0)
         ocr_text = " ".join(ocr_result)
 
         # 3. Generate Embedding
@@ -101,7 +133,7 @@ class ImageAnalyzer:
         return {
             "caption": caption,
             "ocr_text": ocr_text,
-            "embedding": embedding.tolist() # Convert to list for storage
+            "embedding": embedding.tolist()
         }
 
 analyzer = ImageAnalyzer() 

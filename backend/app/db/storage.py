@@ -19,11 +19,12 @@ class Storage:
     def create_tables(self):
         cursor = self.conn.cursor()
         
-        # Images table
+        # Items table (previously images)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 path TEXT UNIQUE,
+                type TEXT DEFAULT 'image',
                 thumbnail_path TEXT,
                 caption TEXT,
                 ocr_text TEXT,
@@ -32,6 +33,12 @@ class Storage:
             )
         ''')
 
+        # Add type column if it doesn't exist (migration)
+        try:
+            cursor.execute('ALTER TABLE images ADD COLUMN type TEXT DEFAULT "image"')
+        except sqlite3.OperationalError:
+            pass # Already exists
+        
         # Concepts/Tags table (for graph nodes)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS concepts (
@@ -53,13 +60,13 @@ class Storage:
         
         self.conn.commit()
 
-    def add_image(self, path, thumbnail_path, caption, ocr_text, embedding, tags):
+    def add_image(self, path, type, thumbnail_path, caption, ocr_text, embedding, tags):
         cursor = self.conn.cursor()
         try:
             cursor.execute('''
-                INSERT OR IGNORE INTO images (path, thumbnail_path, caption, ocr_text, tags)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (path, thumbnail_path, caption, ocr_text, json.dumps(tags)))
+                INSERT OR IGNORE INTO images (path, type, thumbnail_path, caption, ocr_text, tags)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (path, type, thumbnail_path, caption, ocr_text, json.dumps(tags)))
             
             # Get ID (if ignored, we need to fetch it)
             if cursor.lastrowid:
@@ -86,7 +93,7 @@ class Storage:
 
     def get_all_images(self):
         cursor = self.conn.cursor()
-        cursor.execute('SELECT id, path, caption, tags FROM images')
+        cursor.execute('SELECT id, path, caption, tags, type FROM images')
         return cursor.fetchall()
     
     def get_all_embeddings(self):

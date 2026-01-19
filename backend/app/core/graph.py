@@ -21,15 +21,15 @@ class GraphBuilder:
         img_id_map = {}
         
         for img in images:
-            iid, path, caption, tags_json = img
+            iid, path, caption, tags_json, item_type = img
             node_id = f"img_{iid}"
             img_id_map[iid] = node_id
             
             tags = json.loads(tags_json) if tags_json else []
             
             G.add_node(node_id, 
-                       labels=["Image"], 
-                       type="image",
+                       labels=[item_type.capitalize()], 
+                       type=item_type,
                        path=path,
                        caption=caption,
                        name=os.path.basename(path))
