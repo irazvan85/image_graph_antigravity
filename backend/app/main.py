@@ -24,6 +24,8 @@ class ScanRequest(BaseModel):
     path: str
     use_llm: bool = False
     api_key: str = ""
+    model_id: str = "gemini-1.5-flash-latest"
+    provider: str = "gemini"
 
 @app.get("/")
 def read_root():
@@ -34,11 +36,45 @@ def scan_folder(request: ScanRequest, background_tasks: BackgroundTasks):
     if not os.path.isdir(request.path):
         raise HTTPException(status_code=400, detail="Invalid directory path")
     
-    started = worker.start_scan(request.path, request.use_llm, request.api_key)
+    started = worker.start_scan(request.path, request.use_llm, request.api_key, request.model_id, request.provider)
     if not started:
         raise HTTPException(status_code=409, detail="Scan already in progress")
         
-    return {"status": "Scan started", "path": request.path, "llm": request.use_llm}
+    return {"status": "Scan started", "path": request.path, "llm": request.use_llm, "model": request.model_id, "provider": request.provider}
+
+class ModelRequest(BaseModel):
+    api_key: str
+    provider: str = "gemini"
+
+@app.post("/models")
+def list_models(request: ModelRequest):
+    try:
+        if request.provider == "openai":
+            # For OpenAI, we return known vision models as listing them is more complex via API
+            return {"models": [
+                {"id": "gpt-4o", "name": "GPT-4o (High Performance)"},
+                {"id": "gpt-4o-mini", "name": "GPT-4o Mini (Fast & Cheap)"}
+            ]}
+        
+        import google.generativeai as genai
+        genai.configure(api_key=request.api_key)
+        # Filter for models that support generating content from images
+        models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # We prioritize Gemini 1.5+ for vision
+                if 'gemini' in m.name:
+                    models.append({"id": m.name, "name": m.display_name})
+        return {"models": models}
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+@app.post("/stop")
+def stop_scan():
+    stopped = worker.stop_scan()
+    if not stopped:
+        raise HTTPException(status_code=400, detail="No scan in progress")
+    return {"status": "Scan stop requested"}
 
 @app.get("/progress")
 def get_progress():

@@ -13,7 +13,38 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
 
     // LLM Settings
     const [useLlm, setUseLlm] = useState(false);
+    const [provider, setProvider] = useState("gemini");
     const [apiKey, setApiKey] = useState("");
+    const [models, setModels] = useState([]);
+    const [selectedModel, setSelectedModel] = useState("gemini-1.5-flash-latest");
+
+    useEffect(() => {
+        const fetchModels = async () => {
+            // OpenAI keys start with sk-, Gemini keys are longer/different
+            // We just check for some minimum length
+            if (apiKey.length > 20 || (provider === 'openai' && apiKey.startsWith('sk-'))) {
+                try {
+                    const res = await fetch(`${API_Base}/models`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ api_key: apiKey, provider: provider })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setModels(data.models);
+                        if (data.models.length > 0) {
+                            // If OpenAI, gpt-4o-mini is a good default
+                            const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : data.models[0].id;
+                            setSelectedModel(data.models.find(m => m.id === defaultModel)?.id || data.models[0].id);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch models", e);
+                }
+            }
+        };
+        if (useLlm) fetchModels();
+    }, [apiKey, useLlm, provider]);
 
     useEffect(() => {
         const checkStatus = async () => {
@@ -74,7 +105,9 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                 body: JSON.stringify({
                     path,
                     use_llm: useLlm,
-                    api_key: apiKey
+                    api_key: apiKey,
+                    model_id: selectedModel,
+                    provider: provider
                 })
             });
             if (res.ok) {
@@ -97,6 +130,15 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
             }
         } catch (e) {
             alert("Failed to reset database");
+        }
+    };
+
+    const handleStop = async () => {
+        try {
+            const res = await fetch(`${API_Base}/stop`, { method: 'POST' });
+            if (!res.ok) alert("Failed to stop scan");
+        } catch (e) {
+            console.error("Error stopping scan", e);
         }
     };
 
@@ -176,13 +218,46 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                         Enable Deep LLM Analysis
                     </label>
                     {useLlm && (
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="Gemini API Key"
-                            style={{ width: '100%', marginTop: '8px', padding: '6px', fontSize: '12px', boxSizing: 'border-box' }}
-                        />
+                        <div style={{ marginTop: '10px', padding: '10px', background: '#f8f8f8', borderRadius: '4px' }}>
+                            <div style={{ marginBottom: '8px' }}>
+                                <label style={{ fontSize: '11px', color: '#666', display: 'block' }}>Provider:</label>
+                                <select
+                                    value={provider}
+                                    onChange={(e) => {
+                                        setProvider(e.target.value);
+                                        setModels([]);
+                                        setApiKey("");
+                                    }}
+                                    style={{ width: '100%', padding: '6px', fontSize: '12px' }}
+                                >
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="openai">OpenAI</option>
+                                </select>
+                            </div>
+
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder={`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API Key`}
+                                style={{ width: '100%', marginBottom: '8px', padding: '6px', fontSize: '12px', boxSizing: 'border-box' }}
+                            />
+
+                            {models.length > 0 && (
+                                <div>
+                                    <label style={{ fontSize: '11px', color: '#666', marginBottom: '2px', display: 'block' }}>Select Model:</label>
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        style={{ width: '100%', padding: '6px', fontSize: '12px' }}
+                                    >
+                                        {models.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

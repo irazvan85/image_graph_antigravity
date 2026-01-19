@@ -22,7 +22,7 @@ class ScanWorker:
         if len(self.logs) > 50:
             self.logs.pop(0)
 
-    def start_scan(self, folder_path, use_llm=False, api_key=""):
+    def start_scan(self, folder_path, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
         if self.status == "scanning":
             return False
         
@@ -33,8 +33,12 @@ class ScanWorker:
         self._stop_event.clear()
         self.use_llm = use_llm
         self.api_key = api_key
+        self.model_id = model_id
+        self.provider = provider
         
         self.log(f"Starting scan of {folder_path}...")
+        if use_llm:
+            self.log(f"Using {provider.upper()} Model: {model_id}")
         
         # Enqueue files
         valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.txt')
@@ -65,12 +69,12 @@ class ScanWorker:
 
             try:
                 # Analyze
-                result = analyzer.analyze(file_path, self.use_llm, self.api_key)
+                result = analyzer.analyze(file_path, self.use_llm, self.api_key, self.model_id, self.provider)
                 if result:
                     # Check if it's an error from LLM
                     if "error" in result:
                         err_reason = result["error"]
-                        self.log(f"LLM Failed for {fname}: {err_reason}. Falling back to local...")
+                        self.log(f"{self.provider.upper()} Failed for {fname}: {err_reason}. Falling back to local...")
                         # Run local fallback manually here to get actual content
                         result = analyzer.analyze(file_path, use_llm=False)
                         if not result:
@@ -112,7 +116,24 @@ class ScanWorker:
             
         self.status = "idle"
         self.current_file = ""
-        self.log("Scan complete.")
+        if self._stop_event.is_set():
+            self.log("Scan stopped by user.")
+        else:
+            self.log("Scan complete.")
+
+    def stop_scan(self):
+        if self.status == "scanning":
+            self._stop_event.set()
+            # Clear remaining queue items
+            while not self.queue.empty():
+                try:
+                    self.queue.get_nowait()
+                    self.queue.task_done()
+                except queue.Empty:
+                    break
+            self.log("Stopping scan...")
+            return True
+        return False
 
     def get_progress(self):
         return {

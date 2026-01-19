@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import base64
 import torch
 from PIL import Image
 from transformers import BlipProcessor, BlipForConditionalGeneration
@@ -8,6 +9,7 @@ from sentence_transformers import SentenceTransformer
 import easyocr
 import numpy as np
 import google.generativeai as genai
+from openai import OpenAI
 
 class ImageAnalyzer:
     def __init__(self):
@@ -34,14 +36,14 @@ class ImageAnalyzer:
         self.reader = easyocr.Reader(['en'], gpu=(self.device == "cuda"))
         print("Models loaded.")
 
-    def analyze_with_llm(self, image_path: str, api_key: str):
+    def analyze_with_llm(self, image_path: str, api_key: str, model_id: str = "gemini-1.5-flash-latest"):
         if not api_key:
             return {"error": "Missing API Key", "method": "Gemini Deep AI"}
             
         start_time = time.perf_counter()
         try:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel(model_id)
             
             img = Image.open(image_path)
             prompt = "Analyze this image and provide: 1. A detailed caption. 2. A list of key entities/concepts found in the image. Format as JSON with 'caption' and 'tags' keys."
@@ -78,6 +80,63 @@ class ImageAnalyzer:
             print(f"LLM Error: {err_msg}")
             return {"error": err_msg, "method": "Gemini Deep AI"}
 
+    def analyze_with_openai(self, image_path: str, api_key: str, model_id: str = "gpt-4o-mini"):
+        if not api_key:
+            return {"error": "Missing OpenAI API Key", "method": "OpenAI Deep AI"}
+            
+        start_time = time.perf_counter()
+        try:
+            client = OpenAI(api_key=api_key)
+            
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            prompt = "Analyze this image and provide: 1. A detailed caption. 2. A list of key entities/concepts found in the image. Format as JSON with 'caption' and 'tags' keys. Do not include markdown formatting like ```json."
+            
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500,
+                response_format={"type": "json_object"}
+            )
+            
+            text = response.choices[0].message.content
+            data = json.loads(text)
+            
+            # Use local models for embedding and OCR
+            self._load_models()
+            img = Image.open(image_path)
+            embedding = self.clip_model.encode(img)
+            
+            ocr_result = self.reader.readtext(image_path, detail=0)
+            ocr_text = " ".join(ocr_result)
+            
+            duration = time.perf_counter() - start_time
+            return {
+                "caption": data.get("caption", ""),
+                "ocr_text": ocr_text,
+                "embedding": embedding.tolist(),
+                "tags": data.get("tags", []),
+                "metadata": {"duration": duration, "method": f"OpenAI ({model_id})"}
+            }
+        except Exception as e:
+            err_msg = str(e)
+            print(f"OpenAI Error: {err_msg}")
+            return {"error": err_msg, "method": "OpenAI Deep AI"}
+
     def analyze_text(self, file_path: str):
         self._load_models()
         start_time = time.perf_counter()
@@ -110,14 +169,18 @@ class ImageAnalyzer:
             "metadata": {"duration": duration, "method": "Text Analysis"}
         }
 
-    def analyze(self, file_path: str, use_llm=False, api_key=""):
+    def analyze(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
         ext = os.path.splitext(file_path)[1].lower()
         if ext == '.txt':
             return self.analyze_text(file_path)
 
         start_time = time.perf_counter()
         if use_llm:
-            res = self.analyze_with_llm(file_path, api_key)
+            if provider == "openai":
+                res = self.analyze_with_openai(file_path, api_key, model_id)
+            else:
+                res = self.analyze_with_llm(file_path, api_key, model_id)
+                
             if res and "error" not in res: 
                 return res
             elif res and "error" in res:
