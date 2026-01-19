@@ -137,8 +137,7 @@ class ImageAnalyzer:
             print(f"OpenAI Error: {err_msg}")
             return {"error": err_msg, "method": "OpenAI Deep AI"}
 
-    def analyze_text(self, file_path: str):
-        self._load_models()
+    def analyze_text(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
         start_time = time.perf_counter()
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -147,32 +146,78 @@ class ImageAnalyzer:
             print(f"Error reading text file {file_path}: {e}")
             return None
 
-        # Truncate content for CLIP (usually max 77 tokens, but for sentence-transformers we just give it a chunk)
-        # SentenceTransformer handles longer text better than raw CLIP, but we limit for speed/memory
-        summary_text = content[:500] 
+        summary_text = content[:1000] # Give more context to LLM
+        
+        if use_llm:
+            if provider == "openai":
+                res = self._analyze_text_openai(summary_text, api_key, model_id)
+            else:
+                res = self._analyze_text_gemini(summary_text, api_key, model_id)
+            
+            if res and "error" not in res:
+                self._load_models()
+                embedding = self.clip_model.encode(summary_text[:500])
+                duration = time.perf_counter() - start_time
+                return {
+                    "caption": res.get("summary", ""),
+                    "content": content,
+                    "embedding": embedding.tolist(),
+                    "tags": res.get("tags", []),
+                    "metadata": {"duration": duration, "method": f"{provider.upper()} Text Deep AI"}
+                }
+            elif res and "error" in res:
+                return res
 
-        # Generate embedding for text
-        # CLIP ViT-B-32 in SentenceTransformer handles text as well
-        embedding = self.clip_model.encode(summary_text)
-
-        # Extract keywords (simple heuristic: words > 3 chars, split by lines/space)
-        words = [w.strip(".,!?;:()[]{}").lower() for w in summary_text.split() if len(w) > 4]
+        # Fallback / Local Analysis
+        self._load_models()
+        embedding = self.clip_model.encode(summary_text[:500])
+        
+        words = [w.strip(".,!?;:()[]{}").lower() for w in summary_text[:500].split() if len(w) > 4]
         stop_words = {'the', 'and', 'this', 'that', 'with', 'from', 'image', 'picture', 'photo', 'about', 'there', 'their'}
         tags = list(set([w for w in words if w not in stop_words]))[:10]
 
         duration = time.perf_counter() - start_time
         return {
-            "caption": summary_text[:100] + "...", # Use start of text as caption
+            "caption": summary_text[:100] + "...",
             "content": content,
             "embedding": embedding.tolist(),
             "tags": tags,
-            "metadata": {"duration": duration, "method": "Text Analysis"}
+            "metadata": {"duration": duration, "method": "Local Text Analysis"}
         }
+
+    def _analyze_text_gemini(self, text, api_key, model_id):
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_id)
+            prompt = f"Summarize this text in 100 chars and extract 5-10 keywords as JSON with 'summary' and 'tags' keys:\n\n{text}"
+            response = model.generate_content(prompt)
+            res_text = response.text
+            if "```json" in res_text:
+                res_text = res_text.split("```json")[1].split("```")[0]
+            elif "```" in res_text:
+                res_text = res_text.split("```")[1].split("```")[0]
+            return json.loads(res_text)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _analyze_text_openai(self, text, api_key, model_id):
+        try:
+            client = OpenAI(api_key=api_key)
+            prompt = f"Summarize this text in 100 chars and extract 5-10 keywords as JSON with 'summary' and 'tags' keys:\n\n{text}"
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
+        except Exception as e:
+            return {"error": str(e)}
 
     def analyze(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
         ext = os.path.splitext(file_path)[1].lower()
         if ext == '.txt':
-            return self.analyze_text(file_path)
+            return self.analyze_text(file_path, use_llm, api_key, model_id, provider)
 
         start_time = time.perf_counter()
         if use_llm:
