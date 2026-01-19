@@ -22,7 +22,7 @@ class ScanWorker:
         if len(self.logs) > 50:
             self.logs.pop(0)
 
-    def start_scan(self, folder_path, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
+    def start_scan(self, folder_path, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini", base_url=""):
         if self.status == "scanning":
             return False
         
@@ -35,6 +35,7 @@ class ScanWorker:
         self.api_key = api_key
         self.model_id = model_id
         self.provider = provider
+        self.base_url = base_url
         
         self.log(f"Starting scan of {folder_path}...")
         if use_llm:
@@ -69,7 +70,7 @@ class ScanWorker:
 
             try:
                 # Analyze
-                result = analyzer.analyze(file_path, self.use_llm, self.api_key, self.model_id, self.provider)
+                result = analyzer.analyze(file_path, self.use_llm, self.api_key, self.model_id, self.provider, self.base_url)
                 if result:
                     # Check if it's an error from LLM
                     if "error" in result:

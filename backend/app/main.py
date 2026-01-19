@@ -26,6 +26,7 @@ class ScanRequest(BaseModel):
     api_key: str = ""
     model_id: str = "gemini-1.5-flash-latest"
     provider: str = "gemini"
+    base_url: str = ""
 
 @app.get("/")
 def read_root():
@@ -36,15 +37,16 @@ def scan_folder(request: ScanRequest, background_tasks: BackgroundTasks):
     if not os.path.isdir(request.path):
         raise HTTPException(status_code=400, detail="Invalid directory path")
     
-    started = worker.start_scan(request.path, request.use_llm, request.api_key, request.model_id, request.provider)
+    started = worker.start_scan(request.path, request.use_llm, request.api_key, request.model_id, request.provider, request.base_url)
     if not started:
         raise HTTPException(status_code=409, detail="Scan already in progress")
         
     return {"status": "Scan started", "path": request.path, "llm": request.use_llm, "model": request.model_id, "provider": request.provider}
 
 class ModelRequest(BaseModel):
-    api_key: str
+    api_key: str = ""
     provider: str = "gemini"
+    base_url: str = "http://localhost:1234/v1"
 
 @app.post("/models")
 def list_models(request: ModelRequest):
@@ -56,6 +58,18 @@ def list_models(request: ModelRequest):
                 {"id": "gpt-4o-mini", "name": "GPT-4o Mini (Fast & Cheap)"}
             ]}
         
+        if request.provider == "lmstudio":
+            import requests
+            url = f"{request.base_url.rstrip('/')}/models"
+            resp = requests.get(url, timeout=5)
+            if resp.ok:
+                data = resp.json()
+                # Local models usually in data['data']
+                models = [{"id": m['id'], "name": m['id']} for m in data.get('data', [])]
+                return {"models": models}
+            else:
+                raise Exception(f"LM Studio returned {resp.status_code}")
+
         import google.generativeai as genai
         genai.configure(api_key=request.api_key)
         # Filter for models that support generating content from images

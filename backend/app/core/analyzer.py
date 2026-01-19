@@ -137,7 +137,67 @@ class ImageAnalyzer:
             print(f"OpenAI Error: {err_msg}")
             return {"error": err_msg, "method": "OpenAI Deep AI"}
 
-    def analyze_text(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
+    def analyze_with_lmstudio(self, image_path: str, model_id: str, base_url: str = "http://localhost:1234/v1"):
+        start_time = time.perf_counter()
+        try:
+            # LM Studio is OpenAI compatible
+            client = OpenAI(api_key="lm-studio", base_url=base_url)
+            
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            prompt = "Analyze this image and provide: 1. A detailed caption. 2. A list of key entities/concepts found in the image. Format as JSON with 'caption' and 'tags' keys. Do not include markdown formatting like ```json."
+            
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500
+            )
+            
+            text = response.choices[0].message.content
+            # LM Studio might not support response_format="json_object" depending on the model, 
+            # so we use the same robust parsing as Gemini
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            
+            data = json.loads(text)
+            
+            self._load_models()
+            img = Image.open(image_path)
+            embedding = self.clip_model.encode(img)
+            
+            ocr_result = self.reader.readtext(image_path, detail=0)
+            ocr_text = " ".join(ocr_result)
+            
+            duration = time.perf_counter() - start_time
+            return {
+                "caption": data.get("caption", ""),
+                "ocr_text": ocr_text,
+                "embedding": embedding.tolist(),
+                "tags": data.get("tags", []),
+                "metadata": {"duration": duration, "method": f"LM Studio ({model_id})"}
+            }
+        except Exception as e:
+            err_msg = str(e)
+            print(f"LM Studio Error: {err_msg}")
+            return {"error": err_msg, "method": "LM Studio Local AI"}
+
+    def analyze_text(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini", base_url=""):
         start_time = time.perf_counter()
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -151,6 +211,8 @@ class ImageAnalyzer:
         if use_llm:
             if provider == "openai":
                 res = self._analyze_text_openai(summary_text, api_key, model_id)
+            elif provider == "lmstudio":
+                res = self._analyze_text_lmstudio(summary_text, model_id, base_url)
             else:
                 res = self._analyze_text_gemini(summary_text, api_key, model_id)
             
@@ -214,15 +276,35 @@ class ImageAnalyzer:
         except Exception as e:
             return {"error": str(e)}
 
-    def analyze(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini"):
+    def _analyze_text_lmstudio(self, text, model_id, base_url="http://localhost:1234/v1"):
+        try:
+            client = OpenAI(api_key="lm-studio", base_url=base_url)
+            prompt = f"Summarize this text in 100 chars and extract 5-10 keywords as JSON with 'summary' and 'tags' keys:\n\n{text}"
+            response = client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200
+            )
+            res_text = response.choices[0].message.content
+            if "```json" in res_text:
+                res_text = res_text.split("```json")[1].split("```")[0]
+            elif "```" in res_text:
+                res_text = res_text.split("```")[1].split("```")[0]
+            return json.loads(res_text)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def analyze(self, file_path: str, use_llm=False, api_key="", model_id="gemini-1.5-flash-latest", provider="gemini", base_url=""):
         ext = os.path.splitext(file_path)[1].lower()
         if ext == '.txt':
-            return self.analyze_text(file_path, use_llm, api_key, model_id, provider)
+            return self.analyze_text(file_path, use_llm, api_key, model_id, provider, base_url)
 
         start_time = time.perf_counter()
         if use_llm:
             if provider == "openai":
                 res = self.analyze_with_openai(file_path, api_key, model_id)
+            elif provider == "lmstudio":
+                res = self.analyze_with_lmstudio(file_path, model_id, base_url)
             else:
                 res = self.analyze_with_llm(file_path, api_key, model_id)
                 

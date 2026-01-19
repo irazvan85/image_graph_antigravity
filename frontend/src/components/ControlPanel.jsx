@@ -15,19 +15,24 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
     const [useLlm, setUseLlm] = useState(false);
     const [provider, setProvider] = useState("gemini");
     const [apiKey, setApiKey] = useState("");
+    const [baseUrl, setBaseUrl] = useState("http://localhost:1234/v1");
     const [models, setModels] = useState([]);
     const [selectedModel, setSelectedModel] = useState("gemini-1.5-flash-latest");
 
     useEffect(() => {
         const fetchModels = async () => {
             // OpenAI keys start with sk-, Gemini keys are longer/different
-            // We just check for some minimum length
-            if (apiKey.length > 20 || (provider === 'openai' && apiKey.startsWith('sk-'))) {
+            // LM Studio doesn't need key
+            const isReady = (provider === 'gemini' && apiKey.length > 20) ||
+                (provider === 'openai' && apiKey.startsWith('sk-')) ||
+                (provider === 'lmstudio' && baseUrl.length > 10);
+
+            if (isReady) {
                 try {
                     const res = await fetch(`${API_Base}/models`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ api_key: apiKey, provider: provider })
+                        body: JSON.stringify({ api_key: apiKey, provider: provider, base_url: baseUrl })
                     });
                     if (res.ok) {
                         const data = await res.json();
@@ -37,14 +42,17 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                             const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : data.models[0].id;
                             setSelectedModel(data.models.find(m => m.id === defaultModel)?.id || data.models[0].id);
                         }
+                    } else {
+                        setModels([]);
                     }
                 } catch (e) {
                     console.error("Failed to fetch models", e);
+                    setModels([]);
                 }
             }
         };
         if (useLlm) fetchModels();
-    }, [apiKey, useLlm, provider]);
+    }, [apiKey, useLlm, provider, baseUrl]);
 
     useEffect(() => {
         const checkStatus = async () => {
@@ -107,7 +115,8 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                     use_llm: useLlm,
                     api_key: apiKey,
                     model_id: selectedModel,
-                    provider: provider
+                    provider: provider,
+                    base_url: baseUrl
                 })
             });
             if (res.ok) {
@@ -232,16 +241,27 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
                                 >
                                     <option value="gemini">Google Gemini</option>
                                     <option value="openai">OpenAI</option>
+                                    <option value="lmstudio">Local LLM (LM Studio)</option>
                                 </select>
                             </div>
 
-                            <input
-                                type="password"
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                placeholder={`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API Key`}
-                                style={{ width: '100%', marginBottom: '8px', padding: '6px', fontSize: '12px', boxSizing: 'border-box' }}
-                            />
+                            {provider !== 'lmstudio' ? (
+                                <input
+                                    type="password"
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    placeholder={`${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API Key`}
+                                    style={{ width: '100%', marginBottom: '8px', padding: '6px', fontSize: '12px', boxSizing: 'border-box' }}
+                                />
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={baseUrl}
+                                    onChange={(e) => setBaseUrl(e.target.value)}
+                                    placeholder="LM Studio Base URL (e.g. http://localhost:1234/v1)"
+                                    style={{ width: '100%', marginBottom: '8px', padding: '6px', fontSize: '12px', boxSizing: 'border-box' }}
+                                />
+                            )}
 
                             {models.length > 0 && (
                                 <div>
