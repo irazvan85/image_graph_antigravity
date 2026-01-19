@@ -36,7 +36,7 @@ class ImageAnalyzer:
 
     def analyze_with_llm(self, image_path: str, api_key: str):
         if not api_key:
-            return None
+            return {"error": "Missing API Key", "method": "Gemini Deep AI"}
             
         start_time = time.perf_counter()
         try:
@@ -74,8 +74,9 @@ class ImageAnalyzer:
                 "metadata": {"duration": duration, "method": "Gemini Deep AI"}
             }
         except Exception as e:
-            print(f"LLM Error: {e}")
-            return None
+            err_msg = str(e)
+            print(f"LLM Error: {err_msg}")
+            return {"error": err_msg, "method": "Gemini Deep AI"}
 
     def analyze_text(self, file_path: str):
         self._load_models()
@@ -117,8 +118,11 @@ class ImageAnalyzer:
         start_time = time.perf_counter()
         if use_llm:
             res = self.analyze_with_llm(file_path, api_key)
-            if res: return res
-            # If LLM fails, we continue to local, but we reset the timer or just let it cumulative
+            if res and "error" not in res: 
+                return res
+            elif res and "error" in res:
+                # Propagate error so worker can log it before fallback
+                return res
             
         self._load_models()
         try:

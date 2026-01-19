@@ -67,14 +67,20 @@ class ScanWorker:
                 # Analyze
                 result = analyzer.analyze(file_path, self.use_llm, self.api_key)
                 if result:
+                    # Check if it's an error from LLM
+                    if "error" in result:
+                        err_reason = result["error"]
+                        self.log(f"LLM Failed for {fname}: {err_reason}. Falling back to local...")
+                        # Run local fallback manually here to get actual content
+                        result = analyzer.analyze(file_path, use_llm=False)
+                        if not result:
+                            self.log(f"Fallback also failed for {fname}")
+                            continue
+
                     metadata = result.get("metadata", {})
                     method = metadata.get("method", "Unknown")
                     duration = metadata.get("duration", 0)
                     
-                    # If we requested LLM but method is Local, it means LLM failed
-                    if self.use_llm and method == "Local (BLIP/OCR)":
-                        self.log(f"Fallback: LLM failed for {fname}, using local analysis.")
-
                     self.log(f"{method}: Analyzed {fname} in {duration:.1f}s")
                     
                     # If LLM/Analysis gave us tags, use them.
