@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GraphView from './components/GraphView';
 import ControlPanel from './components/ControlPanel';
+import { ToastProvider } from './components/Toast';
 
 const API_Base = "http://localhost:8001";
 
@@ -31,23 +32,35 @@ function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: 'Segoe UI, sans-serif' }}>
-      <div style={{ width: '350px', flexShrink: 0, height: '100%' }}>
-        <ControlPanel
-          onScan={() => fetchGraph(simThreshold)}
-          onUpdateParams={handleUpdateParams}
-          selectedNode={selectedNode}
-          onSearch={setSearchQuery}
-        />
+    <ToastProvider>
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        width: '100vw',
+        fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+        background: 'var(--bg-primary)'
+      }}>
+        <div style={{
+          width: '360px',
+          flexShrink: 0,
+          height: '100%'
+        }}>
+          <ControlPanel
+            onScan={() => fetchGraph(simThreshold)}
+            onUpdateParams={handleUpdateParams}
+            selectedNode={selectedNode}
+            onSearch={setSearchQuery}
+          />
+        </div>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <GraphView
+            elements={elements}
+            onNodeClick={setSelectedNode}
+            searchQuery={searchQuery}
+          />
+        </div>
       </div>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <GraphView
-          elements={elements}
-          onNodeClick={setSelectedNode}
-          searchQuery={searchQuery}
-        />
-      </div>
-    </div>
+    </ToastProvider>
   );
 }
 

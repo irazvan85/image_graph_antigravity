@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
-import cytoscape from 'cytoscape';
+import { ZoomIn, ZoomOut, Maximize2, Grid3X3 } from 'lucide-react';
 
 const GraphView = ({ elements, onNodeClick, searchQuery }) => {
     const cyRef = useRef(null);
+    const [layout, setLayout] = useState('cose');
 
     const style = [
         {
@@ -12,28 +13,33 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
                 'label': 'data(name)',
                 'text-valign': 'bottom',
                 'text-halign': 'center',
-                'font-size': '12px',
-                'color': '#333',
-                'background-color': '#888',
+                'font-size': '11px',
+                'font-weight': '500',
+                'color': '#e4e6eb',
+                'text-outline-color': '#0f1419',
+                'text-outline-width': '2px',
+                'background-color': '#6b7280',
                 'width': 30,
                 'height': 30,
-                'transition-property': 'background-color, opacity, color',
-                'transition-duration': '0.3s'
+                'transition-property': 'background-color, opacity, width, height, border-width',
+                'transition-duration': '0.25s',
+                'border-width': 0,
+                'border-color': '#fbbf24'
             }
         },
         {
             selector: 'node[type="image"]',
             style: {
-                'background-color': '#007bff',
-                'shape': 'rectangle',
-                'width': 50,
-                'height': 50
+                'background-color': '#3b82f6',
+                'shape': 'round-rectangle',
+                'width': 48,
+                'height': 48
             }
         },
         {
             selector: 'node[type="text"]',
             style: {
-                'background-color': '#fd7e14',
+                'background-color': '#f59e0b',
                 'shape': 'ellipse',
                 'width': 40,
                 'height': 40
@@ -42,78 +48,127 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
         {
             selector: 'node[type="concept"]',
             style: {
-                'background-color': '#28a745',
+                'background-color': '#10b981',
                 'shape': 'ellipse',
-                'width': 20,
-                'height': 20,
-                'font-size': '10px'
+                'width': 22,
+                'height': 22,
+                'font-size': '9px'
+            }
+        },
+        {
+            selector: 'node:active',
+            style: {
+                'overlay-opacity': 0.1,
+                'overlay-color': '#3b82f6'
             }
         },
         {
             selector: 'node.highlighted',
             style: {
-                'background-color': '#ffc107',
-                'color': '#000',
+                'background-color': '#fbbf24',
+                'color': '#fbbf24',
                 'font-weight': 'bold',
-                'width': 60,
-                'height': 60,
-                'z-index': 1000
+                'width': 56,
+                'height': 56,
+                'z-index': 1000,
+                'border-width': 3,
+                'border-color': '#ffffff'
             }
         },
         {
             selector: 'node.dimmed',
             style: {
-                'opacity': 0.2,
-                'text-outline-opacity': 0
+                'opacity': 0.15
+            }
+        },
+        {
+            selector: 'node:selected',
+            style: {
+                'border-width': 3,
+                'border-color': '#8b5cf6'
             }
         },
         {
             selector: 'edge',
             style: {
                 'width': 1,
-                'line-color': '#ccc',
+                'line-color': 'rgba(107, 114, 128, 0.4)',
                 'curve-style': 'bezier',
                 'target-arrow-shape': 'none',
-                'transition-property': 'opacity',
-                'transition-duration': '0.3s'
+                'transition-property': 'opacity, line-color, width',
+                'transition-duration': '0.25s'
             }
         },
         {
             selector: 'edge.dimmed',
             style: {
-                'opacity': 0.1
+                'opacity': 0.05
             }
         },
         {
             selector: 'edge[type="has_concept"]',
             style: {
-                'line-color': '#ddd',
+                'line-color': 'rgba(107, 114, 128, 0.25)',
                 'width': 1
             }
         },
         {
             selector: 'edge[type="similar"]',
             style: {
-                'line-color': '#007bff',
+                'line-color': 'rgba(59, 130, 246, 0.5)',
                 'width': 2,
-                'opacity': 0.5
+                'line-style': 'solid'
+            }
+        },
+        {
+            selector: 'edge:selected',
+            style: {
+                'line-color': '#8b5cf6',
+                'width': 3
             }
         }
     ];
 
-    useEffect(() => {
-        if (cyRef.current) {
-            cyRef.current.layout({
+    const runLayout = (name) => {
+        if (!cyRef.current) return;
+
+        const layouts = {
+            cose: {
                 name: 'cose',
                 animate: true,
+                animationDuration: 500,
                 randomize: false,
-                componentSpacing: 100,
-                nodeRepulsion: 400000,
+                componentSpacing: 120,
+                nodeRepulsion: 500000,
                 edgeElasticity: 100,
                 nestingFactor: 5,
-            }).run();
+            },
+            circle: {
+                name: 'circle',
+                animate: true,
+                animationDuration: 500,
+            },
+            grid: {
+                name: 'grid',
+                animate: true,
+                animationDuration: 500,
+            },
+            concentric: {
+                name: 'concentric',
+                animate: true,
+                animationDuration: 500,
+                minNodeSpacing: 50,
+            }
+        };
+
+        cyRef.current.layout(layouts[name] || layouts.cose).run();
+    };
+
+    useEffect(() => {
+        if (cyRef.current) {
+            runLayout(layout);
         }
-    }, [elements]);
+    }, [elements, layout]);
 
     useEffect(() => {
         if (!cyRef.current) return;
@@ -134,18 +189,106 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
         cy.elements().addClass('dimmed').removeClass('highlighted');
         matches.removeClass('dimmed').addClass('highlighted');
 
-        // Center on matches if any
         if (matches.length > 0) {
             cy.animate({
                 center: { eles: matches },
-                zoom: 1.2,
-                duration: 500
+                zoom: Math.min(cy.zoom() * 1.2, 2),
+                duration: 400,
+                easing: 'ease-out-cubic'
             });
         }
     }, [searchQuery]);
 
+    const handleZoomIn = () => {
+        if (cyRef.current) {
+            cyRef.current.animate({ zoom: cyRef.current.zoom() * 1.3, duration: 200 });
+        }
+    };
+
+    const handleZoomOut = () => {
+        if (cyRef.current) {
+            cyRef.current.animate({ zoom: cyRef.current.zoom() / 1.3, duration: 200 });
+        }
+    };
+
+    const handleFit = () => {
+        if (cyRef.current) {
+            cyRef.current.animate({ fit: { padding: 50 }, duration: 300 });
+        }
+    };
+
+    const controlsStyle = {
+        position: 'absolute',
+        top: '16px',
+        right: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        zIndex: 100
+    };
+
+    const btnStyle = {
+        width: '36px',
+        height: '36px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 'var(--radius-md)',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        transition: 'all var(--transition-fast)',
+        backdropFilter: 'blur(8px)'
+    };
+
+    const legendStyle = {
+        position: 'absolute',
+        bottom: '16px',
+        right: '16px',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 'var(--radius-md)',
+        padding: '12px',
+        fontSize: '11px',
+        color: 'var(--text-secondary)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 100
+    };
+
+    const legendItem = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '6px'
+    };
+
+    // Empty state
+    if (!elements || elements.length === 0) {
+        return (
+            <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--bg-primary)',
+                color: 'var(--text-muted)'
+            }}>
+                <Grid3X3 size={64} style={{ marginBottom: '20px', opacity: 0.3 }} />
+                <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                    No Graph Data
+                </div>
+                <div style={{ fontSize: '13px', maxWidth: '300px', textAlign: 'center', lineHeight: '1.5' }}>
+                    Enter a folder path in the control panel and click the play button to analyze your images.
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div style={{ width: '100%', height: '100%' }}>
+        <div style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg-primary)' }}>
             <CytoscapeComponent
                 elements={elements}
                 style={{ width: '100%', height: '100%' }}
@@ -155,8 +298,61 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
                     cy.on('tap', 'node', (event) => {
                         onNodeClick(event.target.data());
                     });
+                    cy.on('tap', (event) => {
+                        if (event.target === cy) {
+                            onNodeClick(null);
+                        }
+                    });
                 }}
             />
+
+            {/* Floating Controls */}
+            <div style={controlsStyle}>
+                <button
+                    style={btnStyle}
+                    onClick={handleZoomIn}
+                    onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    title="Zoom In"
+                >
+                    <ZoomIn size={18} />
+                </button>
+                <button
+                    style={btnStyle}
+                    onClick={handleZoomOut}
+                    onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    title="Zoom Out"
+                >
+                    <ZoomOut size={18} />
+                </button>
+                <button
+                    style={btnStyle}
+                    onClick={handleFit}
+                    onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    title="Fit to Screen"
+                >
+                    <Maximize2 size={18} />
+                </button>
+            </div>
+
+            {/* Legend */}
+            <div style={legendStyle}>
+                <div style={{ fontWeight: '600', marginBottom: '10px', color: 'var(--text-primary)' }}>Legend</div>
+                <div style={legendItem}>
+                    <div style={{ width: 14, height: 14, background: '#3b82f6', borderRadius: '3px' }} />
+                    <span>Images</span>
+                </div>
+                <div style={legendItem}>
+                    <div style={{ width: 14, height: 14, background: '#f59e0b', borderRadius: '50%' }} />
+                    <span>Text Files</span>
+                </div>
+                <div style={{ ...legendItem, marginBottom: 0 }}>
+                    <div style={{ width: 12, height: 12, background: '#10b981', borderRadius: '50%' }} />
+                    <span>Concepts/Tags</span>
+                </div>
+            </div>
         </div>
     );
 };
