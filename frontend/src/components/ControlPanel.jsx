@@ -22,6 +22,30 @@ const ControlPanel = ({ onScan, onUpdateParams, onSelectImage, selectedNode, onS
     const [models, setModels] = useState([]);
     const [selectedModel, setSelectedModel] = useState("gemini-1.5-flash-latest");
 
+    // Load settings from localStorage on mount
+    useEffect(() => {
+        const savedPath = localStorage.getItem('ig_path');
+        const savedProvider = localStorage.getItem('ig_provider');
+        const savedApiKey = localStorage.getItem('ig_apiKey');
+        const savedBaseUrl = localStorage.getItem('ig_baseUrl');
+        const savedUseLlm = localStorage.getItem('ig_useLlm') === 'true';
+
+        if (savedPath) setPath(savedPath);
+        if (savedProvider) setProvider(savedProvider);
+        if (savedApiKey) setApiKey(savedApiKey);
+        if (savedBaseUrl) setBaseUrl(savedBaseUrl);
+        setUseLlm(savedUseLlm);
+    }, []);
+
+    // Save settings to localStorage on change
+    useEffect(() => {
+        localStorage.setItem('ig_path', path);
+        localStorage.setItem('ig_provider', provider);
+        localStorage.setItem('ig_apiKey', apiKey);
+        localStorage.setItem('ig_baseUrl', baseUrl);
+        localStorage.setItem('ig_useLlm', useLlm);
+    }, [path, provider, apiKey, baseUrl, useLlm]);
+
     // Styles
     const styles = {
         panel: {

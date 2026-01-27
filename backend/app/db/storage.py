@@ -95,6 +95,12 @@ class Storage:
         cursor = self.conn.cursor()
         cursor.execute('SELECT id, path, caption, tags, type FROM images')
         return cursor.fetchall()
+
+    def get_image_by_id(self, image_id):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT id, path, caption, tags, type FROM images WHERE id = ?', (image_id,))
+        return cursor.fetchone()
+    
     
     def get_all_embeddings(self):
         cursor = self.conn.cursor()

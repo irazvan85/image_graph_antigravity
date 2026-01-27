@@ -36,6 +36,7 @@ def test_get_graph():
     # Inject dummy data to trigger graph building logic
     db.add_image(
         path="/tmp/test_image.jpg",
+        type="image",
         thumbnail_path="",
         caption="A test image",
         ocr_text="text",

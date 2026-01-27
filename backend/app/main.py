@@ -5,6 +5,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
 import json
+import io
+from PIL import Image
+from fastapi.responses import FileResponse, Response
 from app.core.worker import worker
 from app.core.graph import graph_builder
 from app.db.storage import db
@@ -103,17 +106,33 @@ def get_graph(sim_threshold: float = 0.7):
 
 @app.get("/image/{image_id}")
 def get_image_metadata(image_id: int):
-    # This is a bit inefficient without a specific DB get method, but works for now
-    images = db.get_all_images()
-    for img in images:
-        if img[0] == image_id:
-            return {
-                "id": img[0],
-                "path": img[1],
-                "caption": img[2],
-                "tags": json.loads(img[3]) if img[3] else []
-            }
+    # Retrieve directly from DB using image_id
+    img = db.get_image_by_id(image_id)
+    if img:
+        return {
+            "id": img[0],
+            "path": img[1],
+            "caption": img[2],
+            "tags": json.loads(img[3]) if img[3] else []
+        }
     raise HTTPException(status_code=404, detail="Image not found")
+
+@app.get("/thumbnail/{image_id}")
+def get_thumbnail(image_id: int):
+    img = db.get_image_by_id(image_id)
+    if not img or not os.path.exists(img[1]):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    try:
+        with Image.open(img[1]) as pil_img:
+            pil_img.thumbnail((128, 128))
+            img_byte_arr = io.BytesIO()
+            # Save as JPEG for better compression/speed
+            pil_img.convert('RGB').save(img_byte_arr, format='JPEG', quality=80)
+            return Response(content=img_byte_arr.getvalue(), media_type="image/jpeg", 
+                            headers={"Cache-Control": "public, max-age=31536000"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating thumbnail: {str(e)}")
 
 @app.get("/image_content/{image_id}")
 def get_image_content(image_id: int):

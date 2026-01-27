@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { ZoomIn, ZoomOut, Maximize2, Grid3X3 } from 'lucide-react';
 
+const API_Base = "http://localhost:8001";
+
 const GraphView = ({ elements, onNodeClick, searchQuery }) => {
     const cyRef = useRef(null);
     const [layout, setLayout] = useState('cose');
@@ -32,8 +34,12 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
             style: {
                 'background-color': '#3b82f6',
                 'shape': 'round-rectangle',
-                'width': 48,
-                'height': 48
+                'width': 64,
+                'height': 64,
+                'background-image': (node) => `${API_Base}/thumbnail/${node.data('id').split('_')[1]}`,
+                'background-fit': 'cover',
+                'border-width': 2,
+                'border-color': 'rgba(255, 255, 255, 0.2)'
             }
         },
         {
@@ -117,7 +123,9 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
             style: {
                 'line-color': 'rgba(59, 130, 246, 0.5)',
                 'width': 2,
-                'line-style': 'solid'
+                'line-style': 'solid',
+                'transition-property': 'opacity, width, line-color',
+                'transition-duration': '0.5s'
             }
         },
         {
@@ -128,6 +136,26 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
             }
         }
     ];
+
+    // Simple edge pulse animation
+    useEffect(() => {
+        let frame;
+        let opacity = 0.5;
+        let direction = 1;
+
+        const animate = () => {
+            if (cyRef.current) {
+                opacity += 0.005 * direction;
+                if (opacity >= 0.8 || opacity <= 0.3) direction *= -1;
+
+                cyRef.current.edges('[type="similar"]').style('opacity', opacity);
+            }
+            frame = requestAnimationFrame(animate);
+        };
+
+        frame = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frame);
+    }, [elements]);
 
     const runLayout = (name) => {
         if (!cyRef.current) return;
@@ -335,6 +363,37 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
                 >
                     <Maximize2 size={18} />
                 </button>
+
+                <div style={{ position: 'relative' }}>
+                    <button
+                        style={btnStyle}
+                        onClick={() => {
+                            const layouts = ['cose', 'circle', 'grid', 'concentric'];
+                            const nextIdx = (layouts.indexOf(layout) + 1) % layouts.length;
+                            setLayout(layouts[nextIdx]);
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                        onMouseOut={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        title={`Current Layout: ${layout.charAt(0).toUpperCase() + layout.slice(1)} (Click to switch)`}
+                    >
+                        <Grid3X3 size={18} />
+                    </button>
+                    <div style={{
+                        position: 'absolute',
+                        right: '44px',
+                        top: '0',
+                        background: 'var(--bg-surface)',
+                        padding: '4px 10px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '10px',
+                        whiteSpace: 'nowrap',
+                        color: 'var(--text-muted)',
+                        border: '1px solid var(--border-color)',
+                        pointerEvents: 'none'
+                    }}>
+                        Layout: {layout}
+                    </div>
+                </div>
             </div>
 
             {/* Legend */}
