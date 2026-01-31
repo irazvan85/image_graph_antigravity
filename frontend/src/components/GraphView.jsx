@@ -123,9 +123,7 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
             style: {
                 'line-color': 'rgba(59, 130, 246, 0.5)',
                 'width': 2,
-                'line-style': 'solid',
-                'transition-property': 'opacity, width, line-color',
-                'transition-duration': '0.5s'
+                'line-style': 'solid'
             }
         },
         {
@@ -137,25 +135,7 @@ const GraphView = ({ elements, onNodeClick, searchQuery }) => {
         }
     ];
 
-    // Simple edge pulse animation
-    useEffect(() => {
-        let frame;
-        let opacity = 0.5;
-        let direction = 1;
-
-        const animate = () => {
-            if (cyRef.current) {
-                opacity += 0.005 * direction;
-                if (opacity >= 0.8 || opacity <= 0.3) direction *= -1;
-
-                cyRef.current.edges('[type="similar"]').style('opacity', opacity);
-            }
-            frame = requestAnimationFrame(animate);
-        };
-
-        frame = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(frame);
-    }, [elements]);
+    // CSS-based animation is handled in the stylesheet definition for edge[type="similar"]
 
     const runLayout = (name) => {
         if (!cyRef.current) return;

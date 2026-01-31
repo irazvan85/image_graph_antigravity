@@ -1,9 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import GraphView from './components/GraphView';
 import ControlPanel from './components/ControlPanel';
 import { ToastProvider } from './components/Toast';
 
 const API_Base = "http://localhost:8001";
+
+// Simple debounce utility
+function debounce(fn, delay) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
 
 function App() {
   const [elements, setElements] = useState([]);
@@ -26,9 +35,15 @@ function App() {
     fetchGraph();
   }, []);
 
+  // Debounced fetch for slider changes
+  const debouncedFetchGraph = useCallback(
+    debounce((threshold) => fetchGraph(threshold), 300),
+    []
+  );
+
   const handleUpdateParams = (threshold) => {
     setSimThreshold(threshold);
-    fetchGraph(threshold);
+    debouncedFetchGraph(threshold);
   }
 
   // Keyboard Shortcuts

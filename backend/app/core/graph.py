@@ -9,9 +9,23 @@ class GraphBuilder:
     def __init__(self, sim_threshold=0.7, min_confidence=0.5):
         self.sim_threshold = sim_threshold
         self.min_confidence = min_confidence
+        self._cached_graph = None
+        self._cache_valid = False
+        self._last_image_count = 0
+
+    def invalidate_cache(self):
+        """Call this when new images are added."""
+        self._cache_valid = False
 
     def build_graph(self):
-        images = db.get_all_images() # [(id, path, caption, tags_json), ...]
+        images = db.get_all_images()
+        current_count = len(images)
+        
+        # Return cached graph if valid and no new images
+        if self._cache_valid and self._cached_graph and current_count == self._last_image_count:
+            return self._cached_graph
+        
+        self._last_image_count = current_count
         ids, embeddings = db.get_all_embeddings()
         
         G = nx.Graph()
@@ -77,6 +91,8 @@ class GraphBuilder:
                                        type="similar", 
                                        weight=float(sim_matrix[i][j]))
 
+        self._cached_graph = G
+        self._cache_valid = True
         return G
 
     def export_cytoscape(self):

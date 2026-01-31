@@ -117,6 +117,13 @@ class ScanWorker:
             
         self.status = "idle"
         self.current_file = ""
+        # Invalidate cache when processing is complete
+        try:
+             from app.core.graph import graph_builder
+             graph_builder.invalidate_cache()
+        except ImportError:
+             pass
+
         if self._stop_event.is_set():
             self.log("Scan stopped by user.")
         else:

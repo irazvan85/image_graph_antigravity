@@ -33,6 +33,10 @@ class Storage:
             )
         ''')
 
+        # Add indexes for common queries
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_path ON images(path)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_images_type ON images(type)')
+
         # Add type column if it doesn't exist (migration)
         try:
             cursor.execute('ALTER TABLE images ADD COLUMN type TEXT DEFAULT "image"')

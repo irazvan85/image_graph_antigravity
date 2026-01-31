@@ -117,6 +117,22 @@ def get_image_metadata(image_id: int):
         }
     raise HTTPException(status_code=404, detail="Image not found")
 
+from functools import lru_cache
+
+@lru_cache(maxsize=500)
+def _generate_thumbnail_bytes(image_path: str, mtime: float) -> bytes:
+    """Generate and cache thumbnail bytes. mtime ensures cache invalidation on file change."""
+    try:
+        with Image.open(image_path) as pil_img:
+            pil_img.thumbnail((128, 128))
+            img_byte_arr = io.BytesIO()
+            # Save as JPEG for better compression/speed
+            pil_img.convert('RGB').save(img_byte_arr, format='JPEG', quality=80)
+            return img_byte_arr.getvalue()
+    except Exception as e:
+        print(f"Error generating thumbnail for {image_path}: {e}")
+        return None
+
 @app.get("/thumbnail/{image_id}")
 def get_thumbnail(image_id: int):
     img = db.get_image_by_id(image_id)
@@ -124,13 +140,13 @@ def get_thumbnail(image_id: int):
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:
-        with Image.open(img[1]) as pil_img:
-            pil_img.thumbnail((128, 128))
-            img_byte_arr = io.BytesIO()
-            # Save as JPEG for better compression/speed
-            pil_img.convert('RGB').save(img_byte_arr, format='JPEG', quality=80)
-            return Response(content=img_byte_arr.getvalue(), media_type="image/jpeg", 
+        mtime = os.path.getmtime(img[1])
+        thumbnail_bytes = _generate_thumbnail_bytes(img[1], mtime)
+        if thumbnail_bytes:
+             return Response(content=thumbnail_bytes, media_type="image/jpeg", 
                             headers={"Cache-Control": "public, max-age=31536000"})
+        else:
+             raise HTTPException(status_code=500, detail="Could not generate thumbnail")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating thumbnail: {str(e)}")
 
